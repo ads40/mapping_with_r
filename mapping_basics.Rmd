@@ -1,0 +1,211 @@
+---
+title: "Learning mapping"
+author: "ADS"
+date: "`r `"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggmap)
+library(ggplot2)
+library(ggspatial)
+library(ozmaps)
+library(prettymapr)
+library(readr)
+library(rnaturalearth)
+library(rosm)
+library(sf)
+
+```
+
+Learning about mapping in R.
+
+- ozmaps
+- rosm
+- rnaturalearth
+
+More?
+
+## Ozmaps
+
+The simplest function call: `ozmap()`. This is a base R plot.
+
+```{r}
+ozmap()
+```
+
+But we can use the data in the package (itself extracted from ABS mapping data) with `ggplot()`.
+
+```{r}
+oz_states <- ozmaps::ozmap_states
+
+oz_states
+
+ggplot() +
+  # this works without a mapping, because geom_sf() itself looks for a `geometry` column.
+  geom_sf(data = oz_states) +
+  coord_sf()
+
+```
+
+The package provides data for the following:
+
+- `abs_ste`: states and territories
+- `abs_ced`: Commonwealth electoral divisions
+- `abs_lga`: local government areas
+
+```{r}
+ggplot(ozmaps::abs_lga) +
+  geom_sf() +
+  coord_sf()
+```
+
+Then zoom in using the affordances provided by `coord_sf()`
+
+```{r}
+ggplot(ozmaps::abs_lga) +
+  geom_sf() +
+  geom_sf_label(aes(label = NAME), size = 2) +
+  coord_sf(
+    # use the helper tool at Open Street Map
+    xlim = c(150.1035, 151.5015), ylim = c(-33.3386, -34.1993)
+  ) +
+  theme_bw()
+```
+
+### Australian postcodes
+
+```{r}
+postcodes <- read_csv("aus_postcodes_geocoded.csv")
+
+postcodes_shp <- read_sf(
+  dsn = "1270055003_poa_2016_aust_shape/POA_2016_AUST.shp", 
+  layer = "POA_2016_AUST"
+)
+
+ggplot() +
+  geom_sf(data = abs_lga, fill = NA) +
+  geom_sf(data = postcodes_shp, colour = "blue", fill = NA) +
+  coord_sf(
+    xlim = c(150.8, 151.5015), ylim = c(-33.55, -34.1)
+  ) +
+  geom_point(
+    data = postcodes,
+    aes(x = longitude, y = latitude),
+    position = "jitter",
+    colour = "red",
+    alpha = 0.3,
+    size = 1
+  ) +
+  theme_bw()
+
+
+```
+
+## ggmap
+
+```{r}
+
+sydney <- c( left = 150.8, bottom = -34.1, right = 151.5015, top= -33.55)
+
+sydney_map <- get_stamenmap(sydney, zoom = 11, maptype = "terrain-background")
+
+ggmap(sydney_map) +
+  geom_point(
+    data = postcodes,
+    aes(x = longitude, y = latitude),
+    position = "jitter",
+    colour = "red",
+    alpha = 0.4,
+    size = 1
+  )
+
+```
+
+Building with sf objects on top of a ggmap
+
+```{r}
+
+ggmap(sydney_map) +
+  geom_sf(data = postcodes_shp, fill = NA, inherit.aes = FALSE) +
+  coord_sf(
+    xlim = c(150.8, 151.5015), ylim = c(-33.55, -34.1)
+  )
+
+  
+```
+
+Terry Hills
+
+```{r}
+
+terrey_hills <- get_stamenmap(
+  bbox = c(left = 151.1847, bottom = -33.7135, right = 151.2507, top = -33.6596),
+  zoom = 13,
+  maptype = "terrain"
+)
+
+ggmap(terrey_hills)
+
+```
+
+
+
+## rnaturalearth
+
+```{r}
+# Natural Earth shapefiles in the package rnaturalearth
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+ggplot(data = world) +
+  # set up the world map with NE countries data
+  geom_sf(fill = "antiquewhite") +
+  # add labels for countries
+  geom_sf_label(aes(label = name), size = 2) +
+  # crop the map to the Mediterranean
+  coord_sf(xlim = c(-1, 35), ylim = c(30, 47), expand = TRUE) +
+  # adjust the overall visual appearance
+  theme_bw() +
+  theme(
+    panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", size = 0.5),
+    panel.background = element_rect(fill = "lightsteelblue1"),
+    plot.caption = ggtext::element_textbox_simple(halign = 1.01, margin = ggplot2::margin(6, 0, 0, 0))
+  ) +
+  # add labels for the overall map
+  labs(
+    title = "Mediterranean map",
+    subtitle = "Basemap for Mediterranean",
+    caption = paste(
+      "Basemap shapefiles from the Natural Earth project."
+    )
+  ) +
+  # add direction and scale annotations from the package `ggspatial`
+  annotation_scale(location = "bl") +
+  annotation_north_arrow(
+    location = "bl", 
+    which_north = "true",
+    pad_x = unit(1, "cm"),
+    pad_y = unit(1, "cm")
+  )
+
+```
+
+
+
+## rosm
+
+For access to Bing Maps
+
+```{r}
+
+terrey_hills_bbox <- searchbbox("terrey hills, nsw")
+
+prettymap({
+  bmaps.plot(terrey_hills_bbox, type = "Aerial", key = NULL, zoomin = 0) # use Bing API key here
+}, scale.label.col = "white")
+
+```
+
